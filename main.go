@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/estavadormir/gomonitor/config"
+	"github.com/estavadormir/gomonitor/monitor"
 )
 
 const (
@@ -14,7 +16,10 @@ const (
 	CONFIG_FILE = "config.json"
 )
 
-var appConfig *config.Config
+var (
+	appConfig  *config.Config
+	appMonitor *monitor.Monitor
+)
 
 func main() {
 	fmt.Println("Starting Service Monitor...")
@@ -28,9 +33,15 @@ func main() {
 	//log the loaded configs
 	fmt.Printf("Loaded config with %d services to monitor", len(appConfig.Services))
 
+	appMonitor = monitor.New(appConfig)
+	appMonitor.Start()
+
+	defer appMonitor.Stop()
+
 	//register the handler for the diff routes
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/health", healthCheckHandler)
+	http.HandleFunc("/api/services", servicesAPIHandler)
 
 	//config the server
 	server := &http.Server{
@@ -117,4 +128,25 @@ func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}`, time.Now().Format(time.RFC3339), len(appConfig.Services), appConfig.Dashboard.Title)
 
 	w.Write([]byte(response))
+}
+
+// provides a json api for service status
+
+func servicesAPIHandler(w http.ResponseWriter, r *http.Request) {
+
+	log.Printf("API request: %s %s", r.Method, r.URL.Path)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	results := appMonitor.GetResultsSlice()
+
+	//Marshal to JSON
+
+	jsonData, err := json.MarshalIndent(results, "", " ")
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(jsonData)
 }
