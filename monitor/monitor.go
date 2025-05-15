@@ -10,7 +10,6 @@ import (
 	"github.com/estavadormir/gomonitor/config"
 )
 
-// the outcome from an health check
 type Result struct {
 	ServiceName  string    `json:"serviceName"`
 	URL          string    `json:"url"`
@@ -21,7 +20,6 @@ type Result struct {
 	LastChecked  time.Time `json:"lastChecked"`
 }
 
-// manages health checks for config'ed services
 type Monitor struct {
 	config      *config.Config
 	results     map[string]*Result
@@ -31,18 +29,15 @@ type Monitor struct {
 	wg          sync.WaitGroup
 }
 
-// create a new monitor instance
 func New(cfg *config.Config) *Monitor {
 	return &Monitor{
 		config:   cfg,
 		results:  make(map[string]*Result),
 		stopChan: make(chan struct{}),
-		//create a custom http client that cant be re-used for all req
-		client: &http.Client{},
+		client:   &http.Client{},
 	}
 }
 
-// starts the monitoring for all config'ed services
 func (m *Monitor) Start() {
 
 	for _, svc := range m.config.Services {
@@ -56,7 +51,6 @@ func (m *Monitor) Start() {
 	}
 
 	for _, svc := range m.config.Services {
-		//create a copy
 		service := svc
 
 		m.wg.Add(1)
@@ -64,7 +58,6 @@ func (m *Monitor) Start() {
 	}
 }
 
-// stop all the monitoring routines
 func (m *Monitor) Stop() {
 	close(m.stopChan)
 	m.wg.Wait()
@@ -76,10 +69,8 @@ func (m *Monitor) monitorService(svc config.ServiceConfig) {
 	ticker := time.NewTicker(svc.GetCheckInterval())
 	defer ticker.Stop()
 
-	// init check
 	m.checkService(svc)
 
-	// then check on each tick
 	for {
 		select {
 		case <-ticker.C:
@@ -101,7 +92,6 @@ func (m *Monitor) checkService(svc config.ServiceConfig) {
 		LastChecked: time.Now(),
 	}
 
-	//create the req
 	req, err := http.NewRequestWithContext(ctx, svc.Method, svc.URL, nil)
 	if err != nil {
 		result.Status = "down"
@@ -142,12 +132,10 @@ func (m *Monitor) updateResult(result *Result) {
 	m.results[result.ServiceName] = result
 }
 
-// return a copy of all current check results
 func (m *Monitor) GetResults() map[string]Result {
 	m.resultMutex.RLock()
 	defer m.resultMutex.RUnlock()
 
-	//return a copy
 	resultsCopy := make(map[string]Result)
 	for k, v := range m.results {
 		resultsCopy[k] = *v
@@ -155,8 +143,6 @@ func (m *Monitor) GetResults() map[string]Result {
 
 	return resultsCopy
 }
-
-// returns a slice for easier JSON marshaling
 
 func (m *Monitor) GetResultsSlice() []Result {
 	m.resultMutex.RLock()
